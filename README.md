@@ -1,29 +1,10 @@
 # discord-kwin-fps-cap
 
-Discord's Linux screen capture asks the Wayland portal for a stream with **no framerate bound**. The compositor fills that vacuum with a ceiling derived from your display's refresh rate — so on a 240 Hz monitor, kwin hands Discord 240 frames a second to produce a 60 fps stream. Three quarters of the capture, scale and colour-convert work is done on the GPU's shaders and then thrown away.
+Discord's Linux screen capture asks the Wayland portal for an unbounded framerate. The compositor then defaults to your display's refresh rate, so a 240 Hz monitor has kwin pushing 240 fps into a 60 fps stream. Three quarters of the capture, scale and colour-convert work is done on the GPU and thrown straight away.
 
-This is an `LD_PRELOAD` shim that supplies the ceiling Discord should be asking for.
-
-```
-before:  kwin ──240 fps of 3840x2160──▶ Discord ──60 fps──▶ viewers
-after:   kwin ── 60 fps of 3840x2160──▶ Discord ──60 fps──▶ viewers
-```
+This is a shim that supplies the ceiling Discord should be asking for.
 
 Your display keeps its refresh rate. Your game keeps its framerate. The stream is unchanged at 60 fps. The only thing that goes away is the surplus.
-
-## Measured effect
-
-One machine — RTX 5090, driver 610.57.04, KDE Plasma / kwin 6.7.4, PipeWire 1.6.8, Discord 1.0.153, streaming a fullscreen 4K game from a 3840x2160@240 display.
-
-| | Before | After |
-|---|---|---|
-| Negotiated `maxFramerate` | 240 | **60** |
-| PipeWire node errors (`pw-top` ERR) | **6156**, climbing | **4**, flat |
-| Node BUSY per cycle | 7.5 ms | 6.7 ms |
-| Encoder latency | 13.7–14.4 ms | 12.4 ms |
-| Encoder output | 59 fps | 60 fps |
-
-The error counter is the clearest signal: Discord was being handed buffers faster than it could consume them and erroring on the overflow. With the cap in place the pipeline keeps up.
 
 ## How it works
 
