@@ -6,75 +6,72 @@ This is a shim that supplies the ceiling Discord should be asking for.
 
 Your display keeps its refresh rate. Your game keeps its framerate. The stream is unchanged at 60 fps. The only thing that goes away is the surplus.
 
-## How it works
-
-Discord's capture lives in `discord_voice.node` — its own Rust implementation talking to `org.freedesktop.portal.ScreenCast` directly, not Chromium's capturer. It resolves PipeWire entirely through `dlopen`/`dlsym`:
-
-```
-$ nm -D --undefined-only discord_voice.node | grep -c 'pw_'
-0
-$ strings discord_voice.node | grep libpipewire
-libpipewire-0.3.so.0
-```
-
-So `LD_PRELOAD` alone can't interpose `pw_stream_connect` — a `dlsym(handle, ...)` lookup searches that handle's library directly and never sees a preloaded copy. The shim therefore interposes **`dlsym` itself**, returns its own wrapper when Discord asks for `pw_stream_connect`, and forwards everything else untouched.
-
-The wrapper rewrites the `EnumFormat` params before negotiation sees them:
-
-- **video formats only** — `SPA_TYPE_OBJECT_Format` with `mediaType == video`. Audio streams pass through.
-- if `SPA_FORMAT_VIDEO_maxFramerate` is present, every fraction above the cap is clamped
-- if it's **absent** — which is what Discord actually does — it's appended as a `Choice(Range)`
-- params are copied into our own buffer first, so the caller's memory is never mutated
-
-## Requirements
-
-- PipeWire and its development headers (`libpipewire-0.3` via `pkg-config`)
-- A C compiler
-- A Wayland compositor using the ScreenCast portal (developed against kwin; nothing in the shim is kwin-specific)
-
-## Build
+## Install
 
 ```sh
-./build.sh
+bash <(curl -L https://raw.githubusercontent.com/adds39939/discord-kwin-fps-cap/main/install.sh)
 ```
 
-Runs the POD-surgery unit tests and the interposition smoke test, then reports the built library.
+It finds your Discord launchers, asks before changing anything, and adds the shim to each one. Then fully quit Discord — including the tray icon — and start it again.
 
-## Use
+Nothing is written outside your home directory, no Discord file is modified, and no root is needed.
+
+### Uninstall
 
 ```sh
-./run-discord.sh
+bash <(curl -L https://raw.githubusercontent.com/adds39939/discord-kwin-fps-cap/main/uninstall.sh)
 ```
 
-Or set it yourself:
-
-```sh
-LD_PRELOAD=/path/to/libfpscap.so discord
-```
-
-To make it the default for your desktop launcher, copy the system entry and add the preload:
-
-```sh
-cp /usr/share/applications/discord.desktop ~/.local/share/applications/
-sed -i 's|^Exec=|Exec=env LD_PRELOAD='"$HOME"'/.local/lib/libfpscap.so |' \
-    ~/.local/share/applications/discord.desktop
-```
+Launchers you had customised yourself are backed up before being touched and restored on the way out.
 
 ### Options
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `DISCORD_CAPTURE_FPS_CAP` | `60` | Ceiling handed to the portal |
-| `FPSCAP_DEBUG` | unset | Log every param rewritten |
+```sh
+./install.sh --cap 30    # ceiling, default 60
+./install.sh --yes       # no prompts
+```
 
-With `FPSCAP_DEBUG=1` you should see, once the stream starts:
+Keep the cap at or above your stream's output framerate; below it you lose stream smoothness.
+
+## How it works
+
+Discord loads PipeWire at runtime with `dlsym`, so the shim interposes `dlsym` and hands back its own `pw_stream_connect`. That wrapper adds a framerate ceiling to the capture format before the compositor ever negotiates it.
+
+Video capture only — audio streams pass through untouched.
+
+## Verifying
+
+With a stream running, both the compositor and Discord should report the ceiling you set:
+
+```sh
+pw-dump | grep -A2 maxFramerate | head
+```
+
+For a verbose run, `FPSCAP_DEBUG=1` logs every rewrite:
 
 ```
 [fpscap] active, capping capture maxFramerate at 60
 [fpscap] added maxFramerate -> 60
 ```
 
-`added` means Discord proposed no ceiling and one was supplied; `clamped` means it proposed a higher one that was lowered. If neither line ever appears, the capture isn't going through `pw_stream_connect` and this shim isn't the right tool.
+`added` means Discord proposed no ceiling and one was supplied; `clamped` means it proposed a higher one that was lowered. If neither line appears, the capture isn't going through `pw_stream_connect` and this shim isn't the right tool.
+
+## Build from source
+
+Needs a C compiler and the PipeWire headers (`libpipewire-0.3` via `pkg-config`).
+
+```sh
+git clone https://github.com/adds39939/discord-kwin-fps-cap
+cd discord-kwin-fps-cap
+./build.sh      # builds and runs the tests
+./install.sh    # uses the library you just built
+```
+
+To run it once without installing anything:
+
+```sh
+LD_PRELOAD=$PWD/libfpscap.so discord
+```
 
 ## License
 

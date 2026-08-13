@@ -1,0 +1,97 @@
+name: build and release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libpipewire-0.3-dev libpipewire-0.3-0
+
+      - name: Build and test
+        run: ./build.sh
+
+      - name: Verify the installer end to end
+        run: |
+          set -e
+          T="$(mktemp -d)"
+          mkdir -p "$T/sys" "$T/lib" "$T/apps"
+          printf '[Desktop Entry]\nName=Discord\nExec=/usr/bin/discord --url -- %%u\nType=Application\n' \
+            > "$T/sys/discord.desktop"
+
+          LIB_DIR="$T/lib" APP_DIR="$T/apps" SYS_APP_DIRS="$T/sys" NO_COLOR=1 \
+            ./install.sh --yes --cap 60
+
+          grep -q '^Exec=env LD_PRELOAD=.*libfpscap.so DISCORD_CAPTURE_FPS_CAP=60 /usr/bin/discord' \
+            "$T/apps/discord.desktop" || { echo "Exec not patched"; exit 1; }
+          test -f "$T/lib/libfpscap.so" || { echo "library not installed"; exit 1; }
+
+          LIB_DIR="$T/lib" APP_DIR="$T/apps" NO_COLOR=1 ./uninstall.sh --yes
+
+          test ! -e "$T/apps/discord.desktop" || { echo "launcher not removed"; exit 1; }
+          test ! -e "$T/lib/libfpscap.so"     || { echo "library not removed"; exit 1; }
+          echo "installer round-trip OK"
+
+      - name: Package
+        id: package
+        run: |
+          set -e
+          NAME=discord-kwin-fps-cap
+          mkdir -p "dist/$NAME"
+          cp libfpscap.so install.sh uninstall.sh build.sh \
+             fpscap.c test.c test-interpose.c README.md LICENSE "dist/$NAME/"
+          chmod +x "dist/$NAME"/*.sh
+          tar -czf "dist/$NAME.tar.gz" -C dist "$NAME"
+          echo "sha=$(sha256sum "dist/$NAME.tar.gz" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          ls -l dist
+
+      - name: Publish the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA256: ${{ steps.package.outputs.sha }}
+        run: |
+          set -e
+          SHORT="$(echo "$GITHUB_SHA" | cut -c1-7)"
+          RAW="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main"
+
+          {
+            echo "Built from main at [$SHORT](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)."
+            echo
+            echo "### Install"
+            echo
+            echo '```sh'
+            echo "bash <(curl -L $RAW/install.sh)"
+            echo '```'
+            echo
+            echo "### Uninstall"
+            echo
+            echo '```sh'
+            echo "bash <(curl -L $RAW/uninstall.sh)"
+            echo '```'
+            echo
+            echo "sha256: \`$SHA256\`"
+          } > notes.md
+
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest \
+            dist/discord-kwin-fps-cap.tar.gz \
+            --target "$GITHUB_SHA" \
+            --title "latest" \
+            --notes-file notes.md
