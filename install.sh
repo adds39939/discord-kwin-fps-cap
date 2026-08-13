@@ -27,6 +27,11 @@ BACKUP_SUFFIX=".fpscap-backup"
 
 CAP=60
 ASSUME_YES=0
+LIB_SRC=""
+TMP_DIR=""
+
+cleanup() { [ -n "$TMP_DIR" ] && rm -rf "$TMP_DIR"; return 0; }
+trap cleanup EXIT
 
 # ---------- output ----------
 
@@ -90,7 +95,8 @@ bootstrap() {
 	local tmp
 	command -v tar >/dev/null 2>&1 || die "need tar to unpack the release"
 	tmp="$(mktemp -d)"
-	say "${DIM}Fetching the latest release...${R}" >&2
+	TMP_DIR="$tmp"
+	say "${DIM}Fetching the latest release...${R}"
 	fetch "$TARBALL_URL" "$tmp/release.tar.gz" \
 		|| die "could not download $TARBALL_URL"
 	tar -xzf "$tmp/release.tar.gz" -C "$tmp" --strip-components=1 \
@@ -98,19 +104,21 @@ bootstrap() {
 	HERE="$tmp"
 }
 
-find_library() {
+# Sets LIB_SRC, and may move HERE to a downloaded release. Must NOT be called
+# in a command substitution - the subshell would discard both.
+prepare_source() {
 	[ -f "$HERE/$LIB_NAME" ] || [ -f "$HERE/fpscap.c" ] || bootstrap
 
 	if [ -f "$HERE/$LIB_NAME" ]; then
-		printf '%s' "$HERE/$LIB_NAME"
+		LIB_SRC="$HERE/$LIB_NAME"
 		return 0
 	fi
 	if [ -f "$HERE/build.sh" ] && [ -f "$HERE/fpscap.c" ]; then
-		say "${DIM}No prebuilt library here; building from source...${R}" >&2
+		say "${DIM}No prebuilt library here; building from source...${R}"
 		( cd "$HERE" && ./build.sh >/dev/null 2>&1 ) \
 			|| die "build failed - you need a C compiler and the PipeWire headers (libpipewire-0.3)"
 		if [ -f "$HERE/$LIB_NAME" ]; then
-			printf '%s' "$HERE/$LIB_NAME"
+			LIB_SRC="$HERE/$LIB_NAME"
 			return 0
 		fi
 	fi
@@ -194,7 +202,7 @@ say "${DIM}Caps the frames Discord requests from the compositor, so it stops"
 say "burning GPU on frames it throws away.${R}"
 say ""
 
-LIB_SRC="$(find_library)" || die "$LIB_NAME not found next to this script, and no sources to build it from"
+prepare_source || die "$LIB_NAME not found next to this script, and no sources to build it from"
 
 mapfile -t ENTRIES < <(find_entries)
 if [ "${#ENTRIES[@]}" -eq 0 ]; then
