@@ -77,13 +77,13 @@ jobs:
             echo "### Install"
             echo
             echo '```sh'
-            echo "bash <(curl -L $RAW/install.sh)"
+            echo "curl -L $RAW/install.sh | bash"
             echo '```'
             echo
             echo "### Uninstall"
             echo
             echo '```sh'
-            echo "bash <(curl -L $RAW/uninstall.sh)"
+            echo "curl -L $RAW/uninstall.sh | bash"
             echo '```'
             echo
             echo "sha256: \`$SHA256\`"
