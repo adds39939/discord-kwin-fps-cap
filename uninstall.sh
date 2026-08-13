@@ -2,7 +2,7 @@
 #
 # Remove the capture framerate cap and restore your Discord launchers.
 #
-#   bash <(curl -L https://raw.githubusercontent.com/adds39939/discord-kwin-fps-cap/main/uninstall.sh)
+#   curl -L https://raw.githubusercontent.com/adds39939/discord-kwin-fps-cap/main/uninstall.sh | bash
 #
 #   ./uninstall.sh            interactive
 #   ./uninstall.sh --yes      no prompts
