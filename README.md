@@ -95,43 +95,6 @@ With `FPSCAP_DEBUG=1` you should see, once the stream starts:
 
 `added` means Discord proposed no ceiling and one was supplied; `clamped` means it proposed a higher one that was lowered. If neither line ever appears, the capture isn't going through `pw_stream_connect` and this shim isn't the right tool.
 
-## Verifying
-
-With a stream running:
-
-```sh
-pw-dump > /tmp/pw.json
-python3 -c '
-import json
-for o in json.load(open("/tmp/pw.json")):
-    i = o.get("info") or {}; p = i.get("props") or {}
-    if "Video" not in str(p.get("media.class", "")): continue
-    for f in (i.get("params", {}) or {}).get("Format", []) or []:
-        print(p.get("node.name"), f.get("size"), "max", f.get("maxFramerate"))'
-```
-
-Both the compositor and Discord nodes should report `max {'num': 60, 'denom': 1}`.
-
-## Caveats
-
-- `LD_PRELOAD` reaches every Discord child process. The shim overrides only `dlsym` and forwards everything it doesn't care about, but that is the blast radius.
-- Interposing `dlsym` means resolving the real one via `dlvsym(RTLD_NEXT, ...)`. The shim tries `GLIBC_2.34`, then `2.2.5`, then `2.0`.
-- Rewritten params are deliberately not freed. `pw_stream_connect` runs a handful of times per session, and leaking a few hundred bytes beats a use-after-free if the callee retains the pointer.
-- Capping capture below your stream's output framerate will cost stream smoothness. `60` suits a 60 fps stream.
-- Nothing is written to disk and no Discord file is modified. To disable, launch Discord without the preload.
-
-## Why not fix it elsewhere?
-
-Every other avenue was checked first and none is exposed:
-
-- no `KWIN_*` environment variable for screencast framerate
-- no `kwinrc` or `xdg-desktop-portal-kde` config key
-- no `/VirtualOutputs` DBus interface in KWin 6.7
-- `zkde_screencast_unstable_v1::stream_virtual_output` takes name/width/height/scale — **no refresh parameter**
-- Discord's `captureVideoFrameRate` transport option exists but doesn't reach the capture negotiation
-
-Lowering the display's refresh rate works, and so does patching kwin to clamp the ceiling it offers — but the first costs you the refresh rate you paid for, and the second means maintaining a compositor fork. This shim targets only the process with the bug.
-
 ## License
 
 MIT — see [LICENSE](LICENSE).
