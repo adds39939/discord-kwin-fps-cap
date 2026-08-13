@@ -2,7 +2,7 @@
 #
 # Install the capture framerate cap and wire it into your Discord launchers.
 #
-#   bash <(curl -L https://raw.githubusercontent.com/adds39939/discord-kwin-fps-cap/main/install.sh)
+#   curl -L https://raw.githubusercontent.com/adds39939/discord-kwin-fps-cap/main/install.sh | bash
 #
 #   ./install.sh              interactive
 #   ./install.sh --yes        accept defaults, no prompts
@@ -218,7 +218,7 @@ else
 	say ""
 fi
 
-if [ "$ASSUME_YES" = 0 ] && [ -t 0 ]; then
+if [ "$ASSUME_YES" = 0 ] && [ -r /dev/tty ]; then
 	read -r -p "Framerate ceiling [$CAP]: " reply </dev/tty || reply=""
 	if [ -n "$reply" ]; then
 		case "$reply" in
@@ -265,6 +265,6 @@ say ""
 if [ -f "$LIB_DIR/fpscap-uninstall.sh" ]; then
 	say "To remove: ${DIM}$LIB_DIR/fpscap-uninstall.sh${R}"
 else
-	say "To remove: ${DIM}bash <(curl -L https://raw.githubusercontent.com/$REPO/main/uninstall.sh)${R}"
+	say "To remove: ${DIM}curl -L https://raw.githubusercontent.com/$REPO/main/uninstall.sh | bash${R}"
 fi
 say ""

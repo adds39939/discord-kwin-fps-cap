@@ -9,7 +9,7 @@ Your display keeps its refresh rate. Your game keeps its framerate. The stream i
 ## Install
 
 ```sh
-bash <(curl -L https://raw.githubusercontent.com/adds39939/discord-kwin-fps-cap/main/install.sh)
+curl -L https://raw.githubusercontent.com/adds39939/discord-kwin-fps-cap/main/install.sh | bash
 ```
 
 It finds your Discord launchers, asks before changing anything, and adds the shim to each one. Then fully quit Discord — including the tray icon — and start it again.
@@ -19,7 +19,7 @@ Nothing is written outside your home directory, no Discord file is modified, and
 ### Uninstall
 
 ```sh
-bash <(curl -L https://raw.githubusercontent.com/adds39939/discord-kwin-fps-cap/main/uninstall.sh)
+curl -L https://raw.githubusercontent.com/adds39939/discord-kwin-fps-cap/main/uninstall.sh | bash
 ```
 
 Launchers you had customised yourself are backed up before being touched and restored on the way out.
@@ -29,6 +29,12 @@ Launchers you had customised yourself are backed up before being touched and res
 ```sh
 ./install.sh --cap 30    # ceiling, default 60
 ./install.sh --yes       # no prompts
+```
+
+Piping to `bash` needs `-s --` to pass options through:
+
+```sh
+curl -L .../install.sh | bash -s -- --cap 30
 ```
 
 Keep the cap at or above your stream's output framerate; below it you lose stream smoothness.
