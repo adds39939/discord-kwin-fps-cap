@@ -1,0 +1,12 @@
+# build output
+*.so
+*.o
+/test
+/test-interpose
+
+# editor / OS
+*.swp
+*~
+.vscode/
+.idea/
+.DS_Store
